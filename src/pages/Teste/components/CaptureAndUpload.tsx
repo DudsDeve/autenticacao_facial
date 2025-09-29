@@ -8,6 +8,7 @@ import {
   Typography,
   Paper,
   LinearProgress,
+  Alert,
   Chip,
   Stack,
   Avatar,
@@ -21,6 +22,7 @@ import {
   CheckCircle,
   Error as ErrorIcon,
   Phone,
+  Schedule,
   Face,
   AutoMode,
 } from '@mui/icons-material';
@@ -39,7 +41,7 @@ type Props = {
   initialTimestamp: number | null;
 };
 
-export function CaptureAndUpload({ initialTelefone }: Props) {
+export default function BankStyleCamera({ initialTelefone, initialTimestamp }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -48,12 +50,14 @@ export function CaptureAndUpload({ initialTelefone }: Props) {
   const [status, setStatus] = useState('');
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [hasSupport, setHasSupport] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [faceDetected, setFaceDetected] = useState(false);
   const [faceInPosition, setFaceInPosition] = useState(false);
   const [autoCapture, setAutoCapture] = useState(true);
   const [countdown, setCountdown] = useState(0);
+  const [facePosition, setFacePosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   
   const telefone = initialTelefone;
 
@@ -64,6 +68,7 @@ export function CaptureAndUpload({ initialTelefone }: Props) {
       const hasFaceDetection = 'FaceDetector' in window;
       
       if (!hasMediaDevices) {
+        setHasSupport(false);
         setStatus('Seu navegador não suporta acesso à câmera. Use HTTPS e um navegador atualizado.');
       } else if (!hasFaceDetection) {
         setStatus('Detecção facial não disponível. Modo manual ativado.');
@@ -110,8 +115,8 @@ export function CaptureAndUpload({ initialTelefone }: Props) {
     try {
       // Simula detecção facial (em produção, use FaceDetector API ou biblioteca ML)
       // Por compatibilidade, vamos usar uma simulação baseada em movimento
-      //const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const hasMovement = false; //detectMovement(imageData);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const hasMovement = detectMovement(imageData);
       
       if (hasMovement) {
         // Simula posição do rosto no centro da tela
@@ -127,6 +132,7 @@ export function CaptureAndUpload({ initialTelefone }: Props) {
           height: faceHeight
         };
         
+        setFacePosition(mockFace);
         setFaceDetected(true);
         
         // Verifica se o rosto está na posição correta (centro do círculo)
@@ -139,6 +145,7 @@ export function CaptureAndUpload({ initialTelefone }: Props) {
       } else {
         setFaceDetected(false);
         setFaceInPosition(false);
+        setFacePosition(null);
       }
     } catch (error) {
       console.log('Face detection not available, using fallback');
@@ -149,7 +156,12 @@ export function CaptureAndUpload({ initialTelefone }: Props) {
     }
   }, [cameraActive, autoCapture, uploading, countdown]);
 
-
+  // Simula detecção de movimento (placeholder para detecção real)
+  const detectMovement = (imageData: ImageData): boolean => {
+    // Esta é uma implementação simplificada
+    // Em produção, você usaria uma biblioteca real de ML ou FaceDetector API
+    return Math.random() > 0.3; // Simula detecção
+  };
 
   const checkFacePosition = (face: { x: number; y: number; width: number; height: number }, canvasWidth: number, canvasHeight: number): boolean => {
     const centerX = canvasWidth / 2;
@@ -256,14 +268,14 @@ export function CaptureAndUpload({ initialTelefone }: Props) {
 
   const saveBase64ToSupabase = async (base64: string) => {
     // Simula salvamento (substitua pela sua implementação real)
-    console.log('Salvando base64 para telefone:', telefone, 'dados:', base64.substring(0, 50) + '...');
+    console.log('Salvando base64 para telefone:', telefone);
     await new Promise(resolve => setTimeout(resolve, 2000)); // Simula delay
     return { ok: true, action: 'updated' };
   };
 
   const captureAndStore = async () => {
     try {
-      if (!telefone) {  // não é necessário verificar o telefone    aqui é apenas para simular o erro de não ter o telefone 
+      if (!telefone) {
         throw new Error('Telefone não fornecido');
       }
 
@@ -294,9 +306,9 @@ export function CaptureAndUpload({ initialTelefone }: Props) {
     }
   };
 
-  //const formatTimestamp = (timestamp: number) => {
-  //  return new Date(timestamp).toLocaleString('pt-BR');
-  //};
+  const formatTimestamp = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString('pt-BR');
+  };
 
   return (
     <Container maxWidth="sm" sx={{ py: 2 }}>

@@ -1,7 +1,7 @@
 
 
 import { Route, Routes } from 'react-router-dom'
-import Teste from '../pages/index'
+import Teste from '../pages/Teste/index'
 
 
 

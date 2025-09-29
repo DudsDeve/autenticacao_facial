@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { CaptureAndUpload } from './Autentication';
+import CaptureAndUpload from './components/CaptureAndUpload';
 
 
 export default function Teste() {
