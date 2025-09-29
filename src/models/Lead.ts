@@ -1,0 +1,60 @@
+export interface Lead {
+    id: number;
+    created_at: string; // timestamp with time zone
+    nome: string;
+    telefone: string;
+    email: string;
+    session_id: string;
+    faturamento: string;
+    instagram: string;
+    funcionarios: string;
+    problemas: string;
+    momento: string;
+    timming: string;
+    meio_final: string;
+    empresa: string;
+    departamento: string;
+    follow_up_1: string;
+    transferiu_pra_sdr: string;
+    follow_up_2: string;
+    follow_up_3: string;
+    conversa_com_ia: string;
+    faq: string;
+    aviso_enviado: string;
+    faq_carregado: string;
+    ecommerce_ativo: string;
+    quantas_lojas_tem_atualmente: string;
+    cidade: string;
+    necessidade: string;
+    agendamento_realizado: string;
+    mensagem_de_confirmacao_enviada: string;
+    timestamp: string; // time without time zone (ajuste se necessário)
+    disposto_a_investir_4k: string;
+    quando_pretende_abrir_a_nova_loja: string;
+    tipo_de_operacao: string;
+    'mql?': boolean | null;
+    pos_link_1: string;
+    pos_link_2: string;
+    id_campanha: string;
+    id_conjunto: string;
+    id_criativo: string;
+    nome_conjunto_anuncio: string;
+    nome_criativo_anuncio: string;
+    analise_anuncio: string;
+    ultimo_contato: string; // timestamp with time zone
+    temperatura: string;
+    temperatura_justificativa: string;
+    nivel_da_temperatura: string;
+    data_da_ultima_analise_de_temperatura: string;
+    temperatura_verificada: boolean | null;
+    temperatura_porcentagem_justificativa: string;
+    lead_score: string;
+    data_do_ultimo_lead_score: string;
+    lead_score_justificativa: string;
+    lead_score_verificado: boolean | null;
+    lead_score_porcentagem_justificativa: string;
+    ultimo_sdr: string;
+    id_anuncio_gatilho_wpp: string;
+    sub_canal: string;
+    recadastro: string;
+}

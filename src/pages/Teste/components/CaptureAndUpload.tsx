@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { supabase } from '@database/SupabaseClient';
 import {
   Box,
   Button,
@@ -12,9 +13,9 @@ import {
   Chip,
   Stack,
   Avatar,
+  
   Fade,
   Zoom,
-  CircularProgress,
 } from '@mui/material';
 import {
   PhotoCamera,
@@ -23,9 +24,9 @@ import {
   Error as ErrorIcon,
   Phone,
   Schedule,
-  Face,
-  AutoMode,
 } from '@mui/icons-material';
+import { toast, ToastContainer, Bounce } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function dataURLtoBlob(dataUrl: string): Blob {
   const [meta, b64] = dataUrl.split(',');
@@ -41,204 +42,76 @@ type Props = {
   initialTimestamp: number | null;
 };
 
-export default function BankStyleCamera({ initialTelefone, initialTimestamp }: Props) {
+export default function CaptureAndUpload({ initialTelefone, initialTimestamp }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const animationFrameRef = useRef<number>(0);
-  
   const [status, setStatus] = useState('');
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [hasSupport, setHasSupport] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
-  const [faceDetected, setFaceDetected] = useState(false);
-  const [faceInPosition, setFaceInPosition] = useState(false);
-  const [autoCapture, setAutoCapture] = useState(true);
-  const [countdown, setCountdown] = useState(0);
-  const [facePosition, setFacePosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   
   const telefone = initialTelefone;
 
-  // Verifica suporte do navegador
   useEffect(() => {
-    const checkSupport = () => {
-      const hasMediaDevices = !!navigator.mediaDevices?.getUserMedia;
-      const hasFaceDetection = 'FaceDetector' in window;
-      
-      if (!hasMediaDevices) {
-        setHasSupport(false);
-        setStatus('Seu navegador não suporta acesso à câmera. Use HTTPS e um navegador atualizado.');
-      } else if (!hasFaceDetection) {
-        setStatus('Detecção facial não disponível. Modo manual ativado.');
-        setAutoCapture(false);
-      }
-    };
-    
-    checkSupport();
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setHasSupport(false);
+      setStatus('Seu navegador não suporta acesso à câmera. Use HTTPS e um navegador atualizado.');
+      toast.error('Navegador não suporta acesso à câmera!');
+    }
     return () => {
       stopStream();
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
     };
   }, []);
 
-  const stopStream = useCallback(() => {
+  function stopStream() {
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream.getTracks().forEach((t) => t.stop());
       setStream(null);
       setCameraActive(false);
-      setFaceDetected(false);
-      setFaceInPosition(false);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
     }
-  }, [stream]);
+  }
 
-  // Detecção de rosto
-  const detectFace = useCallback(async () => {
-    if (!videoRef.current || !detectionCanvasRef.current || !cameraActive) return;
-
-    const video = videoRef.current;
-    const canvas = detectionCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx || video.videoWidth === 0 || video.videoHeight === 0) return;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-
+  async function startCamera() {
     try {
-      // Simula detecção facial (em produção, use FaceDetector API ou biblioteca ML)
-      // Por compatibilidade, vamos usar uma simulação baseada em movimento
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const hasMovement = detectMovement(imageData);
-      
-      if (hasMovement) {
-        // Simula posição do rosto no centro da tela
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        const faceWidth = 200;
-        const faceHeight = 250;
-        
-        const mockFace = {
-          x: centerX - faceWidth / 2,
-          y: centerY - faceHeight / 2,
-          width: faceWidth,
-          height: faceHeight
-        };
-        
-        setFacePosition(mockFace);
-        setFaceDetected(true);
-        
-        // Verifica se o rosto está na posição correta (centro do círculo)
-        const isInPosition = checkFacePosition(mockFace, canvas.width, canvas.height);
-        setFaceInPosition(isInPosition);
-        
-        if (isInPosition && autoCapture && !uploading && countdown === 0) {
-          startCountdown();
-        }
-      } else {
-        setFaceDetected(false);
-        setFaceInPosition(false);
-        setFacePosition(null);
-      }
-    } catch (error) {
-      console.log('Face detection not available, using fallback');
-    }
-
-    if (cameraActive) {
-      animationFrameRef.current = requestAnimationFrame(detectFace);
-    }
-  }, [cameraActive, autoCapture, uploading, countdown]);
-
-  // Simula detecção de movimento (placeholder para detecção real)
-  const detectMovement = (imageData: ImageData): boolean => {
-    // Esta é uma implementação simplificada
-    // Em produção, você usaria uma biblioteca real de ML ou FaceDetector API
-    return Math.random() > 0.3; // Simula detecção
-  };
-
-  const checkFacePosition = (face: { x: number; y: number; width: number; height: number }, canvasWidth: number, canvasHeight: number): boolean => {
-    const centerX = canvasWidth / 2;
-    const centerY = canvasHeight / 2;
-    const faceCenterX = face.x + face.width / 2;
-    const faceCenterY = face.y + face.height / 2;
-    
-    const tolerance = 50;
-    return (
-      Math.abs(faceCenterX - centerX) < tolerance &&
-      Math.abs(faceCenterY - centerY) < tolerance &&
-      face.width > 150 && face.width < 300 // Tamanho apropriado
-    );
-  };
-
-  const startCountdown = useCallback(() => {
-    setCountdown(3);
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          captureAndStore();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }, []);
-
-  const startCamera = async () => {
-    try {
-      setStatus('Pedindo acesso à câmera...');
+      setStatus('Pedindo acesso à câmera (selfie)…');
+      toast.info('Solicitando acesso à câmera...');
       stopStream();
       
-      let newStream: MediaStream | null = null;
+      let s: MediaStream | null = null;
       try {
-        newStream = await navigator.mediaDevices.getUserMedia({
-          video: { 
-            facingMode: { exact: 'user' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
+        s = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: 'user' } },
           audio: false
         });
       } catch {
-        newStream = await navigator.mediaDevices.getUserMedia({
+        s = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'user' } },
           audio: false
         });
       }
       
-      setStream(newStream);
+      setStream(s!);
       setCameraActive(true);
-      
       if (videoRef.current) {
-        videoRef.current.srcObject = newStream;
+        videoRef.current.srcObject = s!;
         await videoRef.current.play().catch(() => {});
-        
-        // Inicia detecção facial após o vídeo carregar
-        videoRef.current.onloadedmetadata = () => {
-          detectFace();
-        };
       }
-      
-      setStatus('Posicione seu rosto no círculo central');
-    } catch (error) {
-      console.error(error);
-      setStatus('Não foi possível acessar a câmera. Verifique permissões e HTTPS.');
+      setStatus('Câmera frontal ativa.');
+      toast.success('Câmera ativada com sucesso!');
+    } catch (e) {
+      console.error(e);
+      setStatus('Não foi possível acessar a câmera frontal. Verifique permissões e HTTPS.');
+      toast.error('Falha ao acessar a câmera. Verifique as permissões!');
     }
-  };
+  }
 
-  const captureToDataURL = async (): Promise<{ dataURL: string; mime: string; blob: Blob }> => {
+  async function captureToDataURL(): Promise<{ dataURL: string; mime: string; blob: Blob }> {
     if (!videoRef.current) throw new Error('Vídeo não inicializado');
     
     const video = videoRef.current;
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
+    const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) throw new Error('Vídeo ainda não está pronto.');
     
     const maxW = 1280;
@@ -253,66 +126,134 @@ export default function BankStyleCamera({ initialTelefone, initialTimestamp }: P
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas não disponível');
     
-    // Captura imagem normal (não espelhada)
-    ctx.save();
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, -cw, 0, cw, ch);
-    ctx.restore();
+    // Preview espelhado no <video>; imagem enviada normal
+    ctx.drawImage(video, 0, 0, cw, ch);
     
     const mime = 'image/jpeg';
     const dataURL = canvas.toDataURL(mime, 0.92);
     const blob = dataURLtoBlob(dataURL);
     
     return { dataURL, mime, blob };
-  };
+  }
 
-  const saveBase64ToSupabase = async (base64: string) => {
-    // Simula salvamento (substitua pela sua implementação real)
-    console.log('Salvando base64 para telefone:', telefone);
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simula delay
-    return { ok: true, action: 'updated' };
-  };
+  async function saveBase64ToSupabase(base64: string) {
+    console.log('Tentando salvar para o telefone:', telefone);
+    console.log('Base64 length:', base64.length);
+    
+    const payload = {
+      base64_da_foto_de_perfil: base64
+    };
 
-  const captureAndStore = async () => {
+    try {
+      // 1) Primeiro, verifica se existe um registro com esse telefone
+      const { data: existingData, error: selectError } = await supabase
+        .from('candidatos_aure')
+        .select('telefone')
+        .eq('telefone', telefone)
+        .limit(1);
+
+      if (selectError) {
+        console.error('Erro ao verificar registro existente:', selectError);
+        throw selectError;
+      }
+
+      console.log('Registros encontrados:', existingData);
+
+      if (existingData && existingData.length > 0) {
+        // 2) Se existe, atualiza
+        console.log('Atualizando registro existente...');
+        const { data: updateData, error: updateError } = await supabase
+          .from('candidatos_aure')
+          .update(payload)
+          .eq('telefone', telefone)
+          .select('telefone');
+
+        if (updateError) {
+          console.error('Erro ao atualizar:', updateError);
+          throw updateError;
+        }
+
+        console.log('Registro atualizado:', updateData);
+        return { ok: true, action: 'updated', data: updateData };
+      } else {
+        // 3) Se não existe, cria um novo
+        console.log('Criando novo registro...');
+        const { data: insertData, error: insertError } = await supabase
+          .from('candidatos_aure')
+          .insert({
+            telefone: telefone,
+            ...payload
+          })
+          .select('telefone');
+
+        if (insertError) {
+          console.error('Erro ao inserir:', insertError);
+          throw insertError;
+        }
+
+        console.log('Registro inserido:', insertData);
+        return { ok: true, action: 'inserted', data: insertData };
+      }
+    } catch (error) {
+      console.error('Erro geral no saveBase64ToSupabase:', error);
+      throw error;
+    }
+  }
+
+  async function captureAndStore() {
     try {
       if (!telefone) {
         throw new Error('Telefone não fornecido');
       }
 
       setUploading(true);
-      setStatus('Capturando foto...');
+      setStatus('Capturando…');
+      toast.info('Capturando foto...');
       
       const { dataURL, blob } = await captureToDataURL();
       
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
       
+      // Remove o prefixo data:image/jpeg;base64, para obter apenas o base64
       const base64 = dataURL.replace(/^data:[^;]+;base64,/, '');
       
-      setStatus('Salvando...');
+      setStatus('Salvando no Supabase…');
       const result = await saveBase64ToSupabase(base64);
       
       if (result.ok) {
-        setStatus('✅ Foto salva com sucesso!');
-        stopStream(); // Para a câmera após capturar
+        const message = `Foto salva com sucesso! ${result.action === 'updated' ? '(Registro atualizado)' : '(Novo registro criado)'}`;
+        setStatus(`✅ ${message}`);
+        toast.success(message, {
+          position: "top-center",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
       } else {
-        throw new Error('Falha ao salvar');
+        throw new Error('Falha ao salvar no Supabase');
       }
-    } catch (error: any) {
-      setStatus(`❌ Erro: ${error?.message || 'Erro desconhecido'}`);
+    } catch (e: any) {
+      console.error('Erro completo:', e);
+      const errorMessage = `Erro ao salvar: ${e?.message || 'Erro desconhecido'}`;
+      setStatus(`❌ ${errorMessage}`);
+      toast.error(errorMessage, {
+        position: "top-center",
+        autoClose: 7000,
+      });
     } finally {
       setUploading(false);
-      setCountdown(0);
     }
-  };
+  }
 
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('pt-BR');
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 2 }}>
-      {/* Background gradient */}
+    <Container maxWidth="sm" sx={{ py: 4 }}>
       <Paper 
         elevation={0}
         sx={{ 
@@ -330,27 +271,27 @@ export default function BankStyleCamera({ initialTelefone, initialTimestamp }: P
       
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         {/* Header */}
-        <Card sx={{ mb: 2, borderRadius: 3 }}>
-          <CardContent sx={{ textAlign: 'center', py: 2 }}>
+        <Card sx={{ mb: 3, borderRadius: 4, overflow: 'visible' }}>
+          <CardContent sx={{ textAlign: 'center', pb: 3 }}>
             <Avatar
               sx={{
-                width: 60,
-                height: 60,
+                width: 80,
+                height: 80,
                 bgcolor: 'primary.main',
                 mx: 'auto',
-                mb: 1,
+                mb: 2,
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
               }}
             >
-              <Face sx={{ fontSize: 30 }} />
+              <PhotoCamera sx={{ fontSize: 40 }} />
             </Avatar>
             
-            <Typography variant="h6" component="h2" gutterBottom fontWeight="bold">
-              Verificação Facial
+            <Typography variant="h5" component="h2" gutterBottom fontWeight="bold">
+              Capture sua Foto
             </Typography>
             
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {autoCapture ? 'Posicione seu rosto no círculo - captura automática' : 'Posicione seu rosto e clique para capturar'}
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+              Tire uma selfie com a câmera frontal para salvar no sistema
             </Typography>
 
             {telefone && (
@@ -359,13 +300,14 @@ export default function BankStyleCamera({ initialTelefone, initialTimestamp }: P
                   icon={<Phone />}
                   label={telefone}
                   color="primary"
-                  size="small"
+                  variant="outlined"
                 />
-                {autoCapture && (
+                {initialTimestamp && (
                   <Chip
-                    icon={<AutoMode />}
-                    label="Auto"
+                    icon={<Schedule />}
+                    label={formatTimestamp(initialTimestamp)}
                     color="secondary"
+                    variant="outlined"
                     size="small"
                   />
                 )}
@@ -374,20 +316,29 @@ export default function BankStyleCamera({ initialTelefone, initialTimestamp }: P
           </CardContent>
         </Card>
 
-        {/* Camera Area */}
-        <Card sx={{ mb: 2, borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+        {/* Erro de suporte */}
+        {!hasSupport && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 3, borderRadius: 2 }}
+            icon={<ErrorIcon />}
+          >
+            Seu navegador não suporta acesso à câmera. Use um navegador atualizado e HTTPS.
+          </Alert>
+        )}
+
+        {/* Área de vídeo */}
+        <Card sx={{ mb: 3, borderRadius: 4, overflow: 'hidden' }}>
           <Box
             sx={{
               position: 'relative',
               backgroundColor: '#000',
-              minHeight: 400,
+              minHeight: 300,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden'
+              justifyContent: 'center'
             }}
           >
-            {/* Video */}
             <video
               ref={videoRef}
               autoPlay
@@ -395,155 +346,42 @@ export default function BankStyleCamera({ initialTelefone, initialTimestamp }: P
               muted
               style={{
                 width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                transform: 'scaleX(-1)', // Espelha para selfie
+                height: 'auto',
+                transform: 'scaleX(-1)',
                 display: cameraActive ? 'block' : 'none'
               }}
             />
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
             
-            {/* Overlay circular para guiar posicionamento */}
-            {cameraActive && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  pointerEvents: 'none'
-                }}
-              >
-                {/* Overlay escuro */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.4)'
-                  }}
-                />
-                
-                {/* Círculo guia */}
-                <Box
-                  sx={{
-                    width: 280,
-                    height: 280,
-                    borderRadius: '50%',
-                    border: faceInPosition ? '4px solid #4caf50' : '4px solid #fff',
-                    backgroundColor: 'transparent',
-                    boxShadow: faceInPosition 
-                      ? '0 0 0 9999px rgba(0, 0, 0, 0.4)' 
-                      : '0 0 0 9999px rgba(0, 0, 0, 0.6)',
-                    position: 'relative',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  {/* Ícone central */}
-                  {!faceDetected && (
-                    <Face 
-                      sx={{ 
-                        fontSize: 60, 
-                        color: 'rgba(255, 255, 255, 0.7)',
-                        animation: 'pulse 2s infinite'
-                      }} 
-                    />
-                  )}
-                  
-                  {/* Countdown */}
-                  {countdown > 0 && (
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '100%',
-                        height: '100%'
-                      }}
-                    >
-                      <Typography
-                        variant="h2"
-                        sx={{
-                          color: '#4caf50',
-                          fontWeight: 'bold',
-                          textShadow: '2px 2px 4px rgba(0,0,0,0.7)',
-                          animation: 'scaleUp 1s ease-out'
-                        }}
-                      >
-                        {countdown}
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-                
-                {/* Status indicators */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 20,
-                    left: 20,
-                    right: 20,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}
-                >
-                  {faceDetected && (
-                    <Chip
-                      icon={<Face />}
-                      label={faceInPosition ? "Posição OK" : "Ajuste posição"}
-                      color={faceInPosition ? "success" : "warning"}
-                      size="small"
-                      sx={{ backgroundColor: 'rgba(255,255,255,0.9)' }}
-                    />
-                  )}
-                  
-                  {uploading && (
-                    <CircularProgress size={24} sx={{ color: 'white' }} />
-                  )}
-                </Box>
-              </Box>
-            )}
-
-            {/* Estado inicial */}
             {!cameraActive && (
               <Box textAlign="center" color="white">
                 <CameraAlt sx={{ fontSize: 60, mb: 2, opacity: 0.5 }} />
                 <Typography variant="h6" sx={{ opacity: 0.7 }}>
-                  Toque para ativar a câmera
+                  Clique para ativar a câmera
                 </Typography>
               </Box>
             )}
           </Box>
         </Card>
 
-        {/* Preview da foto capturada */}
+        {/* Preview da foto */}
         {previewUrl && (
           <Zoom in={Boolean(previewUrl)} timeout={500}>
-            <Card sx={{ mb: 2, borderRadius: 3, overflow: 'hidden' }}>
+            <Card sx={{ mb: 3, borderRadius: 4, overflow: 'hidden' }}>
               <Box sx={{ position: 'relative' }}>
                 <img
                   src={previewUrl}
-                  alt="Foto capturada"
+                  alt="Pré-visualização"
                   style={{ width: '100%', height: 'auto', display: 'block' }}
                 />
                 <Chip
                   icon={<CheckCircle />}
-                  label="Foto capturada com sucesso"
+                  label="Foto capturada"
                   color="success"
                   sx={{
                     position: 'absolute',
                     top: 16,
-                    left: 16,
+                    right: 16,
                   }}
                 />
               </Box>
@@ -551,79 +389,62 @@ export default function BankStyleCamera({ initialTelefone, initialTimestamp }: P
           </Zoom>
         )}
 
-        {/* Botões de controle */}
-        <Stack spacing={2} sx={{ mb: 2 }}>
-          {!previewUrl && (
-            <>
-              <Button
-                onClick={startCamera}
-                disabled={uploading}
-                variant="contained"
-                size="large"
-                startIcon={<CameraAlt />}
-                sx={{
-                  py: 2,
-                  borderRadius: 3,
-                  textTransform: 'none',
-                  fontSize: '1.1rem',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                }}
-              >
-                {cameraActive ? 'Reiniciar Câmera' : 'Iniciar Verificação'}
-              </Button>
-
-              {!autoCapture && cameraActive && (
-                <Button
-                  onClick={captureAndStore}
-                  disabled={uploading || !stream}
-                  variant="outlined"
-                  size="large"
-                  startIcon={uploading ? undefined : <PhotoCamera />}
-                  sx={{
-                    py: 2,
-                    borderRadius: 3,
-                    textTransform: 'none',
-                    fontSize: '1.1rem',
-                    borderColor: 'white',
-                    color: 'white',
-                    '&:hover': { borderColor: 'white', backgroundColor: 'rgba(255,255,255,0.1)' }
-                  }}
-                >
-                  {uploading ? 'Processando...' : 'Capturar Foto'}
-                </Button>
-              )}
-            </>
-          )}
-
-          {previewUrl && (
-            <Button
-              onClick={() => {
-                setPreviewUrl('');
-                startCamera();
-              }}
-              variant="outlined"
-              size="large"
-              sx={{
-                py: 2,
-                borderRadius: 3,
-                textTransform: 'none',
-                borderColor: 'white',
+        {/* Botões */}
+        <Stack spacing={2} sx={{ mb: 3 }}>
+          <Button
+            onClick={startCamera}
+            disabled={uploading}
+            variant="outlined"
+            size="large"
+            startIcon={<CameraAlt />}
+            sx={{
+              py: 2,
+              borderRadius: 3,
+              backgroundColor: 'primary.main',
+              color: 'white',
+              textTransform: 'none',
+              fontSize: '1.1rem',
+              borderWidth: 2,
+              '&:hover': {
+                borderWidth: 2,
+                backgroundColor: 'primary.main',
                 color: 'white'
-              }}
-            >
-              Tirar Nova Foto
-            </Button>
-          )}
+              }
+            }}
+          >
+            {cameraActive ? 'Reiniciar Câmera' : 'Ativar Câmera Frontal'}
+          </Button>
+
+          <Button
+            onClick={captureAndStore}
+            disabled={uploading || !stream}
+            variant="contained"
+            size="large"
+            startIcon={uploading ? undefined : <PhotoCamera />}
+            sx={{
+              py: 2.5,
+              borderRadius: 3,
+              textTransform: 'none',
+              fontSize: '1.2rem',
+              fontWeight: 'bold',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+              }
+            }}
+          >
+            {uploading ? 'Salvando...' : 'Capturar e Salvar Foto'}
+          </Button>
         </Stack>
 
-        {/* Progress bar */}
+        {/* Barra de progresso */}
         {uploading && (
           <Fade in={uploading}>
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 3 }}>
               <LinearProgress 
                 sx={{ 
                   borderRadius: 2,
-                  height: 6,
+                  height: 8,
                   backgroundColor: 'rgba(255,255,255,0.2)'
                 }} 
               />
@@ -632,38 +453,37 @@ export default function BankStyleCamera({ initialTelefone, initialTimestamp }: P
         )}
 
         {/* Status */}
-        {status && (
-          <Card sx={{ borderRadius: 3 }}>
-            <CardContent sx={{ py: 2 }}>
-              <Box display="flex" alignItems="center" gap={1}>
-                {status.includes('✅') && <CheckCircle color="success" />}
-                {status.includes('❌') && <ErrorIcon color="error" />}
-                <Typography variant="body2" sx={{ flex: 1 }}>
-                  {status}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        )}
+        <Card sx={{ borderRadius: 3 }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={1}>
+              {status.includes('✅') && <CheckCircle color="success" />}
+              {status.includes('❌') && <ErrorIcon color="error" />}
+              <Typography variant="body2" sx={{ flex: 1 }}>
+                {status || 'Pronto para começar'}
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
       </Box>
 
-      {/* Canvases ocultos */}
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
-      <canvas ref={detectionCanvasRef} style={{ display: 'none' }} />
-
-      {/* CSS Animations */}
-        <style >{`  
-        @keyframes pulse {
-          0%, 100% { opacity: 0.5; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.05); }
-        }
-        
-        @keyframes scaleUp {
-          0% { transform: scale(0.5); opacity: 0; }
-          50% { transform: scale(1.2); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-      `}</style>
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-center"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+        transition={Bounce}
+        toastStyle={{
+          borderRadius: '12px',
+          fontFamily: '"Roboto","Helvetica","Arial",sans-serif'
+        }}
+      />
     </Container>
   );
 }

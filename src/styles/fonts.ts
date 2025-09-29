@@ -1,6 +1,6 @@
 import { css } from 'styled-components'
 
-import { SoraRegular, SoraBold, SoraMedium } from '../assets/fonts/index'
+import { SoraRegular, SoraBold, SoraMedium } from '@assets/fonts/index'
 
 export const MainFontFace = css`
   @font-face {
