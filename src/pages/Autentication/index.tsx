@@ -39,7 +39,7 @@ type Props = {
   initialTimestamp: number | null;
 };
 
-export default function BankStyleCamera({ initialTelefone }: Props) {
+export function CaptureAndUpload({ initialTelefone }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);

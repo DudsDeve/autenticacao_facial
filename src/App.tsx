@@ -1,16 +1,23 @@
-import { useParams } from "react-router-dom";
-import BankStyleCamera from "./pages/Autentication"
+// src/App.tsx
+import { BrowserRouter } from "react-router-dom";
+import { Router } from "./routes";
+import { GlobalStyle } from "./styles/global";
+import { theme } from "./styles/theme";
+import { ThemeProvider } from "@emotion/react";
+import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
+import { muiTheme } from './styles/theme/mui';
 
 function App() {
- 
-  const { slug = '' } = useParams(); // "5531994375739-1758821130980"
-  const [tel, ts] = decodeURIComponent(slug).split('-');
   return (
-    <>
-     <BankStyleCamera initialTelefone={tel || ''}
-      initialTimestamp={ts ? Number(ts) : null} />
-    </>
-  )
+    <ThemeProvider theme={theme}>
+      <MuiThemeProvider theme={muiTheme}>
+          <BrowserRouter>
+            <Router />
+          </BrowserRouter>
+          <GlobalStyle />
+      </MuiThemeProvider>
+    </ThemeProvider>
+  );
 }
 
-export default App
+export default App;
