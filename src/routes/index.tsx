@@ -10,7 +10,7 @@ import Teste from '../pages/index'
 export function Router() {
     return (
         <Routes>
-          <Route path="/" element={<div>Acesso negado - URL inválida</div>} />
+          <Route path="/" element={<Teste/>} />
 
         <Route path="/autenticacao/:slug" element={<Teste/>} />
 
